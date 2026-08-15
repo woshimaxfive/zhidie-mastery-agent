@@ -57,9 +57,10 @@ def parse_range_parameters(raw: str) -> tuple[list[int], list[int]]:
         params = [int(group) for group in match.groups()]
     if params[2] == 0:
         raise AnswerFormatError("步长不能为 0。")
-    generated = list(range(*params))
-    if len(generated) > 100:
+    generated_range = range(*params)
+    if len(generated_range) > 100:
         raise AnswerFormatError("生成序列过长，请检查停止值和步长。")
+    generated = list(generated_range)
     return params, generated
 
 
@@ -74,4 +75,3 @@ TRANSFER_HINTS = {
     2: "起始值是第一项；停止值必须让 10 被生成，但不能让下一项出现。",
     3: "把 start、stop、step 分别对应到第一项、停止边界和相邻项差，再检查实际序列。",
 }
-

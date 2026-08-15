@@ -125,7 +125,15 @@ function HomePage() {
               <h1 id="home-title">{data.recommendation.title}</h1>
               <p className="lead">{data.recommendation.reason}</p>
               <button className="button primary" onClick={continueLearning} disabled={busy}>
-                {busy ? "正在建立会话…" : data.recommendation.action === "start_session" ? "开始诊断" : data.recommendation.action === "resume_session" ? "继续学习" : "查看掌握证据"}
+                {busy
+                  ? "正在建立会话…"
+                  : data.recommendation.action === "start_session"
+                    ? "开始诊断"
+                    : data.recommendation.action === "start_transfer_verification"
+                      ? "开始迁移验证"
+                      : data.recommendation.action === "resume_session"
+                        ? "继续学习"
+                        : "查看掌握证据"}
               </button>
             </section>
 

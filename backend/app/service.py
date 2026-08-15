@@ -94,6 +94,41 @@ def mastery_from_row(row) -> MasterySummary:
     )
 
 
+def get_mastery_profile(connection):
+    return connection.execute(
+        """SELECT * FROM mastery_profiles
+           WHERE learner_id = ? AND knowledge_point_id = ?""",
+        (LEARNER_ID, KNOWLEDGE_POINT_ID),
+    ).fetchone()
+
+
+def save_mastery_profile(
+    connection,
+    mastery_state: str,
+    evidence_level: str,
+    mastery_reason: str,
+    updated_at: str,
+) -> None:
+    connection.execute(
+        """INSERT INTO mastery_profiles
+           (learner_id, knowledge_point_id, mastery_state, evidence_level, mastery_reason, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (learner_id, knowledge_point_id) DO UPDATE SET
+               mastery_state = excluded.mastery_state,
+               evidence_level = excluded.evidence_level,
+               mastery_reason = excluded.mastery_reason,
+               updated_at = excluded.updated_at""",
+        (
+            LEARNER_ID,
+            KNOWLEDGE_POINT_ID,
+            mastery_state,
+            evidence_level,
+            mastery_reason,
+            updated_at,
+        ),
+    )
+
+
 def session_from_row(connection, row) -> SessionView:
     count = connection.execute(
         "SELECT COUNT(*) AS count FROM attempts WHERE session_id = ?", (row["id"],)
@@ -184,10 +219,11 @@ def record_trace(connection, session_id: str, tool: str, label: str, input_summa
 
 def get_home() -> HomeResponse:
     with connect() as connection:
-        row = connection.execute(
+        session = connection.execute(
             "SELECT * FROM sessions WHERE learner_id = ? ORDER BY updated_at DESC LIMIT 1", (LEARNER_ID,)
         ).fetchone()
-        if row is None:
+        profile = get_mastery_profile(connection)
+        if profile is None:
             timestamp = now_iso()
             mastery = MasterySummary(
                 knowledge_point_id=KNOWLEDGE_POINT_ID,
@@ -197,30 +233,39 @@ def get_home() -> HomeResponse:
                 reason="尚无作答证据。",
                 updated_at=timestamp,
             )
+        else:
+            mastery = mastery_from_row(profile)
+
+        if session is None:
             recommendation = Recommendation(
                 knowledge_point_id=KNOWLEDGE_POINT_ID,
                 title="从一次真实作答开始",
                 reason="先了解你如何理解 range() 的起始值、停止值和步长。",
                 action="start_session",
             )
+        elif session["phase"] != "completed":
+            recommendation = Recommendation(
+                knowledge_point_id=KNOWLEDGE_POINT_ID,
+                title="继续完成 range() 学习任务",
+                reason="已有一段未完成的学习会话。",
+                action="resume_session",
+                session_id=session["id"],
+            )
+        elif mastery.mastery_state == "pending_verification":
+            recommendation = Recommendation(
+                knowledge_point_id=KNOWLEDGE_POINT_ID,
+                title="完成一次独立迁移验证",
+                reason="上次迁移使用了提示；新任务将不携带上次提示。",
+                action="start_transfer_verification",
+            )
         else:
-            mastery = mastery_from_row(row)
-            if row["phase"] == "completed":
-                recommendation = Recommendation(
-                    knowledge_point_id=KNOWLEDGE_POINT_ID,
-                    title="回看本次掌握证据",
-                    reason=row["mastery_reason"],
-                    action="review_evidence",
-                    session_id=row["id"],
-                )
-            else:
-                recommendation = Recommendation(
-                    knowledge_point_id=KNOWLEDGE_POINT_ID,
-                    title="继续完成 range() 学习任务",
-                    reason="已有一段未完成的学习会话。",
-                    action="resume_session",
-                    session_id=row["id"],
-                )
+            recommendation = Recommendation(
+                knowledge_point_id=KNOWLEDGE_POINT_ID,
+                title="回看本次掌握证据",
+                reason=mastery.reason,
+                action="review_evidence",
+                session_id=session["id"],
+            )
         return HomeResponse(
             learner=LearnerSummary(id=LEARNER_ID, display_name="体验学习者"),
             recommendation=recommendation,
@@ -234,16 +279,38 @@ def create_session(knowledge_point_id: str) -> SessionEnvelope:
     session_id = new_id("session")
     timestamp = now_iso()
     with connect() as connection:
+        profile = get_mastery_profile(connection)
+        mastery_state = profile["mastery_state"] if profile else "unassessed"
+        evidence_level = profile["evidence_level"] if profile else "none"
+        mastery_reason = profile["mastery_reason"] if profile else "尚无作答证据。"
+        phase = "transfer_check" if mastery_state == "pending_verification" else "diagnostic"
         connection.execute(
             """INSERT INTO sessions
                (id, learner_id, knowledge_point_id, phase, revision, current_hint_level,
                 highest_hint_level, mastery_state, evidence_level, mastery_reason, created_at, updated_at)
-               VALUES (?, ?, ?, 'diagnostic', 1, 0, 0, 'unassessed', 'none', ?, ?, ?)""",
-            (session_id, LEARNER_ID, knowledge_point_id, "尚无作答证据。", timestamp, timestamp),
+               VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?, ?, ?, ?)""",
+            (
+                session_id,
+                LEARNER_ID,
+                knowledge_point_id,
+                phase,
+                mastery_state,
+                evidence_level,
+                mastery_reason,
+                timestamp,
+                timestamp,
+            ),
         )
+        if profile is None:
+            save_mastery_profile(connection, mastery_state, evidence_level, mastery_reason, timestamp)
         row = connection.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
         trace = record_trace(
-            connection, session_id, "create_learning_session", "建立学习会话", "Python range()", "进入诊断阶段"
+            connection,
+            session_id,
+            "create_learning_session",
+            "建立学习会话",
+            "Python range()",
+            f"进入{'迁移验证' if phase == 'transfer_check' else '诊断'}阶段",
         )
         return SessionEnvelope(
             session=session_from_row(connection, row),
@@ -379,13 +446,15 @@ def submit_attempt(session_id: str, task_id: str, raw_answer: str, expected_revi
                 timestamp,
             ),
         )
+        next_hint_level = 0 if correct else hint_level
         connection.execute(
             """UPDATE sessions
-               SET phase = ?, revision = revision + 1, current_hint_level = 0,
+               SET phase = ?, revision = revision + 1, current_hint_level = ?,
                    mastery_state = ?, evidence_level = ?, mastery_reason = ?, updated_at = ?
                WHERE id = ?""",
-            (phase, mastery_state, evidence_level, mastery_reason, timestamp, session_id),
+            (phase, next_hint_level, mastery_state, evidence_level, mastery_reason, timestamp, session_id),
         )
+        save_mastery_profile(connection, mastery_state, evidence_level, mastery_reason, timestamp)
         if evidence_summary is not None:
             connection.execute(
                 """INSERT INTO evidence
@@ -476,10 +545,8 @@ def get_evidence(knowledge_point_id: str) -> EvidenceResponse:
     if knowledge_point_id != KNOWLEDGE_POINT_ID:
         raise api_error(404, "KNOWLEDGE_POINT_NOT_FOUND", "知识点不存在。")
     with connect() as connection:
-        session = connection.execute(
-            "SELECT * FROM sessions WHERE learner_id = ? ORDER BY updated_at DESC LIMIT 1", (LEARNER_ID,)
-        ).fetchone()
-        if session is None:
+        profile = get_mastery_profile(connection)
+        if profile is None:
             timestamp = now_iso()
             mastery = MasterySummary(
                 knowledge_point_id=KNOWLEDGE_POINT_ID,
@@ -491,13 +558,17 @@ def get_evidence(knowledge_point_id: str) -> EvidenceResponse:
             )
             return EvidenceResponse(mastery=mastery, required_next_evidence="完成一次诊断作答。", items=[])
         rows = connection.execute(
-            "SELECT * FROM evidence WHERE session_id = ? ORDER BY created_at DESC", (session["id"],)
+            """SELECT evidence.* FROM evidence
+               JOIN sessions ON sessions.id = evidence.session_id
+               WHERE sessions.learner_id = ? AND sessions.knowledge_point_id = ?
+               ORDER BY evidence.created_at DESC""",
+            (LEARNER_ID, KNOWLEDGE_POINT_ID),
         ).fetchall()
         required = None
-        if session["mastery_state"] != "mastered":
+        if profile["mastery_state"] != "mastered":
             required = "在不使用提示的情况下完成迁移题。"
         return EvidenceResponse(
-            mastery=mastery_from_row(session),
+            mastery=mastery_from_row(profile),
             required_next_evidence=required,
             items=[
                 EvidenceItem(

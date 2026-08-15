@@ -51,6 +51,16 @@ def init_database() -> None:
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS mastery_profiles (
+                learner_id TEXT NOT NULL,
+                knowledge_point_id TEXT NOT NULL,
+                mastery_state TEXT NOT NULL,
+                evidence_level TEXT NOT NULL,
+                mastery_reason TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (learner_id, knowledge_point_id)
+            );
+
             CREATE TABLE IF NOT EXISTS attempts (
                 id TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL REFERENCES sessions(id),
@@ -87,6 +97,23 @@ def init_database() -> None:
                 started_at TEXT NOT NULL,
                 duration_ms INTEGER NOT NULL
             );
+
+            CREATE INDEX IF NOT EXISTS idx_sessions_learner_knowledge_updated
+                ON sessions (learner_id, knowledge_point_id, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_evidence_session_created
+                ON evidence (session_id, created_at DESC);
+
+            INSERT OR IGNORE INTO mastery_profiles
+                (learner_id, knowledge_point_id, mastery_state, evidence_level, mastery_reason, updated_at)
+            SELECT learner_id, knowledge_point_id, mastery_state, evidence_level, mastery_reason, updated_at
+            FROM sessions AS candidate
+            WHERE candidate.rowid = (
+                SELECT latest.rowid
+                FROM sessions AS latest
+                WHERE latest.learner_id = candidate.learner_id
+                  AND latest.knowledge_point_id = candidate.knowledge_point_id
+                ORDER BY latest.updated_at DESC, latest.rowid DESC
+                LIMIT 1
+            );
             """
         )
-

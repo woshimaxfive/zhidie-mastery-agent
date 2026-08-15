@@ -86,7 +86,7 @@ export interface HomeResponse {
     knowledge_point_id: string;
     title: string;
     reason: string;
-    action: "start_session" | "resume_session" | "review_evidence";
+    action: "start_session" | "start_transfer_verification" | "resume_session" | "review_evidence";
     session_id: string | null;
   };
   mastery: MasterySummary;
@@ -116,4 +116,3 @@ export interface ApiErrorPayload {
     request_id: string;
   };
 }
-

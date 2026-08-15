@@ -103,7 +103,7 @@ trace_status:
 }
 ```
 
-没有现有会话时，`action` 为 `start_session`，`session_id` 为 `null`。
+没有现有会话时，`action` 为 `start_session`，`session_id` 为 `null`。最近一次迁移使用过提示、仍待独立验证时，`action` 为 `start_transfer_verification`；前端创建的新会话会直接进入无提示迁移任务。
 
 ## 5. 学习会话
 
@@ -335,6 +335,7 @@ Trace 只包含安全摘要。原始模型提示、思维链、密钥、堆栈�
 
 ```text
 INVALID_ANSWER_FORMAT     422  输入无法按当前任务格式解析
+INVALID_REQUEST           422  请求字段缺失或不符合接口约束
 TASK_MISMATCH             409  提交的任务不是会话当前任务
 STALE_SESSION_REVISION    409  会话已被其他请求更新
 SESSION_NOT_FOUND         404  会话不存在
@@ -352,4 +353,3 @@ INTERNAL_ERROR            500  未分类服务端错误
 - 后端首个可运行版本完成后，团队比较 OpenAPI 与本文档。
 - 契约测试至少覆盖正常作答、提示后答对、独立迁移、格式错误和版本冲突。
 - 未经共同评审，不删除字段、不改变字段含义、不复用枚举值表达新含义。
-

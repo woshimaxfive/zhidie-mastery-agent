@@ -29,7 +29,7 @@ class Recommendation(BaseModel):
     knowledge_point_id: str
     title: str
     reason: str
-    action: Literal["start_session", "resume_session", "review_evidence"]
+    action: Literal["start_session", "start_transfer_verification", "resume_session", "review_evidence"]
     session_id: str | None = None
 
 
@@ -162,4 +162,3 @@ class ApiErrorDetail(BaseModel):
 
 class ApiError(BaseModel):
     error: ApiErrorDetail
-

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import sqlite3
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.exceptions import HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .database import init_database
 from .schemas import (
-    ApiError,
     AttemptRequest,
     AttemptResponse,
     CreateSessionRequest,
@@ -43,6 +44,26 @@ app.add_middleware(
 )
 
 
+def error_payload(
+    code: str,
+    message: str,
+    *,
+    retryable: bool,
+    field: str | None = None,
+    details: dict | None = None,
+) -> dict:
+    return {
+        "error": {
+            "code": code,
+            "message": message,
+            "retryable": retryable,
+            "field": field,
+            "request_id": f"req_{uuid.uuid4().hex[:12]}",
+            "details": details or {},
+        }
+    }
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(_: Request, exc: HTTPException):
     detail = exc.detail if isinstance(exc.detail, dict) else {
@@ -54,6 +75,49 @@ async def http_exception_handler(_: Request, exc: HTTPException):
         "details": {},
     }
     return JSONResponse(status_code=exc.status_code, content={"error": detail})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_: Request, exc: RequestValidationError):
+    issues = []
+    for issue in exc.errors():
+        location = [str(part) for part in issue.get("loc", []) if part != "body"]
+        issues.append({"field": ".".join(location) or None, "type": issue.get("type", "validation_error")})
+    field = issues[0]["field"] if issues else None
+    return JSONResponse(
+        status_code=422,
+        content=error_payload(
+            "INVALID_REQUEST",
+            "请求参数不符合接口要求。",
+            retryable=False,
+            field=field,
+            details={"issues": issues},
+        ),
+    )
+
+
+@app.exception_handler(sqlite3.Error)
+async def persistence_exception_handler(_: Request, __: sqlite3.Error):
+    return JSONResponse(
+        status_code=503,
+        content=error_payload(
+            "PERSISTENCE_FAILED",
+            "本地学习记录暂时无法读取或保存，请重试。",
+            retryable=True,
+        ),
+    )
+
+
+@app.exception_handler(Exception)
+async def internal_exception_handler(_: Request, __: Exception):
+    return JSONResponse(
+        status_code=500,
+        content=error_payload(
+            "INTERNAL_ERROR",
+            "服务发生未分类错误，请稍后重试。",
+            retryable=True,
+        ),
+    )
 
 
 @app.get("/api/v1/health")
@@ -97,4 +161,3 @@ def evidence_get(knowledge_point_id: str) -> EvidenceResponse:
 @app.get("/api/v1/sessions/{session_id}/trace", response_model=TraceResponse)
 def trace_get(session_id: str) -> TraceResponse:
     return get_trace(session_id)
-

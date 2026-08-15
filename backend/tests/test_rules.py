@@ -18,3 +18,7 @@ def test_transfer_accepts_equivalent_stop_values():
     assert parse_range_parameters("range(1, 11, 3)")[1] == [1, 4, 7, 10]
     assert parse_range_parameters("(1, 13, 3)")[1] == [1, 4, 7, 10]
 
+
+def test_transfer_rejects_large_range_before_list_allocation():
+    with pytest.raises(AnswerFormatError, match="生成序列过长"):
+        parse_range_parameters("range(0, 1000000000, 1)")
