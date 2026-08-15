@@ -95,7 +95,8 @@ function HomePage() {
   const continueLearning = async () => {
     if (!data) return;
     if (data.recommendation.action === "review_evidence") {
-      navigate(`/evidence/python.range?session=${data.recommendation.session_id ?? ""}`);
+      const knowledgePointId = encodeURIComponent(data.recommendation.knowledge_point_id);
+      navigate(`/evidence/${knowledgePointId}?session=${data.recommendation.session_id ?? ""}`);
       return;
     }
     if (data.recommendation.action === "resume_session" && data.recommendation.session_id) {
@@ -430,7 +431,14 @@ function LearnPage() {
                 <MasteryBadge state={envelope.mastery.mastery_state} />
                 <h2>{envelope.decision.title}</h2>
                 <p>{envelope.mastery.reason}</p>
-                <button className="button primary" onClick={() => navigate(`/evidence/python.range?session=${sessionId}`)}>查看证据链</button>
+                <button
+                  className="button primary"
+                  onClick={() => navigate(
+                    `/evidence/${encodeURIComponent(envelope.mastery.knowledge_point_id)}?session=${sessionId}`,
+                  )}
+                >
+                  查看证据链
+                </button>
               </section>
             )}
           </section>
