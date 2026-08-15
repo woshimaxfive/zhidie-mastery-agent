@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "./api";
 import type {
@@ -65,9 +65,9 @@ function LoadingState({ label = "正在读取学习状态" }: { label?: string }
   return <div className="state-panel" role="status"><span className="pulse-dot" />{label}</div>;
 }
 
-function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+function ErrorState({ id, message, onRetry }: { id?: string; message: string; onRetry?: () => void }) {
   return (
-    <div className="state-panel error-state" role="alert">
+    <div id={id} className="state-panel error-state" role="alert">
       <strong>本次操作没有完成</strong>
       <p>{message}</p>
       {onRetry && <button className="button secondary" onClick={onRetry}>重新尝试</button>}
@@ -140,7 +140,7 @@ function HomePage() {
                 <span>证据等级</span>
                 <strong>{EVIDENCE_LABELS[data.mastery.evidence_level]}</strong>
               </div>
-              <Link className="text-link" to={`/evidence/${data.mastery.knowledge_point_id}`}>查看完整证据 →</Link>
+              <Link className="text-link" to={`/evidence/${encodeURIComponent(data.mastery.knowledge_point_id)}`}>查看完整证据 →</Link>
             </section>
 
             <section className="learning-path" aria-label="掌握学习路径">
@@ -190,16 +190,18 @@ function ExecutionTape({ envelope, feedback }: { envelope: SessionEnvelope; feed
         <small>{transfer ? "由目标反推参数" : feedback ? "根据本次输入展开" : "提交后显示执行关系"}</small>
       </div>
       <h2 id="execution-title" className="sr-only">range 执行轨迹</h2>
-      <div className="tape-track">
-        {(displayedSequence.length ? displayedSequence : [null, null, null]).map((value, index) => (
-          <div className="tape-step" key={`${value}-${index}`}>
-            <span className={value === null ? "unknown-node" : "value-node"}>{value ?? "?"}</span>
-            {index < (displayedSequence.length ? displayedSequence : [null, null, null]).length - 1 && <i aria-hidden="true" />}
-          </div>
-        ))}
-        {showsIncludedBoundary && (
-          <div className="boundary-node"><span>10</span><small>停止边界</small></div>
-        )}
+      <div className="tape-scroll" role="region" aria-label="可横向滚动的 range 执行轨迹" tabIndex={0}>
+        <div className="tape-track">
+          {(displayedSequence.length ? displayedSequence : [null, null, null]).map((value, index) => (
+            <div className="tape-step" key={`${value}-${index}`}>
+              <span className={value === null ? "unknown-node" : "value-node"}>{value ?? "?"}</span>
+              {index < (displayedSequence.length ? displayedSequence : [null, null, null]).length - 1 && <i aria-hidden="true" />}
+            </div>
+          ))}
+          {showsIncludedBoundary && (
+            <div className="boundary-node"><span>10</span><small>停止边界</small></div>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -212,9 +214,14 @@ function LearnPage() {
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState<AttemptResponse["attempt"] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [answerError, setAnswerError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
   const [trace, setTrace] = useState<TraceItem[]>([]);
+  const [traceError, setTraceError] = useState<string | null>(null);
+  const answerInputRef = useRef<HTMLInputElement>(null);
+  const traceTriggerRef = useRef<HTMLButtonElement>(null);
+  const traceDrawerRef = useRef<HTMLElement>(null);
 
   const load = () => {
     setError(null);
@@ -227,7 +234,7 @@ function LearnPage() {
     event.preventDefault();
     if (!envelope || !answer.trim()) return;
     setBusy(true);
-    setError(null);
+    setAnswerError(null);
     try {
       const response = await api.submitAttempt(
         sessionId,
@@ -239,7 +246,8 @@ function LearnPage() {
       setEnvelope(response);
       setAnswer("");
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "作答未能提交，请重新尝试。");
+      setAnswerError(reason instanceof ApiError ? reason.message : "作答未能提交，请重新尝试。");
+      requestAnimationFrame(() => answerInputRef.current?.focus());
     } finally {
       setBusy(false);
     }
@@ -264,13 +272,68 @@ function LearnPage() {
   };
 
   const openTrace = async () => {
+    setTrace([]);
+    setTraceError(null);
     setTraceOpen(true);
     try {
       setTrace(await api.trace(sessionId));
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "执行记录暂时无法读取。");
+      setTraceError(reason instanceof ApiError ? reason.message : "执行记录暂时无法读取。");
     }
   };
+
+  const closeTrace = () => {
+    setTraceOpen(false);
+    requestAnimationFrame(() => traceTriggerRef.current?.focus());
+  };
+
+  useEffect(() => {
+    if (!traceOpen) return;
+    const drawer = traceDrawerRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const focusableSelector = [
+      "a[href]",
+      "button:not([disabled])",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      "[tabindex]:not([tabindex='-1'])",
+    ].join(",");
+    const getFocusable = () => Array.from(drawer?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
+    requestAnimationFrame(() => getFocusable()[0]?.focus());
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeTrace();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = getFocusable();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        drawer?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !drawer?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawer?.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [traceOpen]);
 
   if (!envelope && !error) return <Shell><main className="page-frame"><LoadingState /></main></Shell>;
   if (!envelope && error) return <Shell><main className="page-frame"><ErrorState message={error} onRetry={load} /></main></Shell>;
@@ -321,16 +384,23 @@ function LearnPage() {
                 {error && <ErrorState message={error} />}
 
                 <form className="answer-form" onSubmit={submit}>
+                  {answerError && <ErrorState id="answer-error" message={answerError} />}
                   <label htmlFor="answer">你的答案</label>
                   <div className="answer-row">
                     <input
+                      ref={answerInputRef}
                       id="answer"
                       value={answer}
-                      onChange={(event) => setAnswer(event.target.value)}
+                      onChange={(event) => {
+                        setAnswer(event.target.value);
+                        if (answerError) setAnswerError(null);
+                      }}
                       placeholder={placeholder}
                       autoComplete="off"
                       disabled={busy}
-                      aria-describedby="answer-note"
+                      aria-invalid={Boolean(answerError)}
+                      aria-describedby={answerError ? "answer-note answer-error" : "answer-note"}
+                      aria-errormessage={answerError ? "answer-error" : undefined}
                     />
                     <button className="button primary" disabled={busy || !answer.trim()}>
                       {busy ? "正在判断…" : "提交答案"}
@@ -367,19 +437,27 @@ function LearnPage() {
               <div><dt>状态依据</dt><dd>{envelope.mastery.reason}</dd></div>
               <div><dt>下一步</dt><dd>{envelope.decision.next_step}</dd></div>
             </dl>
-            <button className="button ghost" onClick={openTrace}>查看执行记录</button>
+            <button ref={traceTriggerRef} className="button ghost" onClick={openTrace}>查看执行记录</button>
           </aside>
         </div>
       </main>
 
       {traceOpen && (
-        <div className="drawer-backdrop" onMouseDown={() => setTraceOpen(false)}>
-          <aside className="trace-drawer" aria-label="Agent 执行记录" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="drawer-backdrop" onMouseDown={closeTrace}>
+          <aside
+            ref={traceDrawerRef}
+            className="trace-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="trace-title"
+            tabIndex={-1}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             <div className="drawer-heading">
-              <div><p className="eyebrow">可追溯过程</p><h2>Agent 执行记录</h2></div>
-              <button className="icon-button" onClick={() => setTraceOpen(false)} aria-label="关闭执行记录">×</button>
+              <div><p className="eyebrow">可追溯过程</p><h2 id="trace-title">Agent 执行记录</h2></div>
+              <button className="icon-button" onClick={closeTrace} aria-label="关闭执行记录">×</button>
             </div>
-            {trace.length === 0 ? <LoadingState label="正在读取执行记录" /> : (
+            {traceError ? <ErrorState message={traceError} onRetry={openTrace} /> : trace.length === 0 ? <LoadingState label="正在读取执行记录" /> : (
               <ol className="trace-list">
                 {trace.map((item) => (
                   <li key={item.trace_id}>
@@ -403,6 +481,7 @@ function LearnPage() {
 }
 
 function EvidencePage() {
+  const { knowledgeId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("session");
   const [data, setData] = useState<EvidenceResponse | null>(null);
@@ -411,7 +490,7 @@ function EvidencePage() {
 
   const load = () => {
     setError(null);
-    Promise.all([api.evidence(), sessionId ? api.trace(sessionId) : Promise.resolve([])])
+    Promise.all([api.evidence(knowledgeId), sessionId ? api.trace(sessionId) : Promise.resolve([])])
       .then(([evidence, traceItems]) => {
         setData(evidence);
         setTrace(traceItems);
@@ -419,7 +498,7 @@ function EvidencePage() {
       .catch((reason: ApiError) => setError(reason.message));
   };
 
-  useEffect(load, [sessionId]);
+  useEffect(load, [knowledgeId, sessionId]);
 
   return (
     <Shell>
@@ -430,7 +509,7 @@ function EvidencePage() {
           <>
             <header className="evidence-heading">
               <div>
-                <p className="eyebrow">Python · range()</p>
+                <p className="eyebrow">{data.mastery.knowledge_point_name}</p>
                 <h1>掌握不是一次答对，<br />而是一条能够复查的证据链。</h1>
               </div>
               <div className="mastery-verdict">

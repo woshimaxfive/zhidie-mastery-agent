@@ -22,8 +22,8 @@
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; background: var(--paper); }
-body { margin: 0; min-width: 320px; min-height: 100vh; }
+html { background: var(--paper); }
+body { margin: 0; min-width: 0; min-height: 100vh; }
 button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 a { color: inherit; }
@@ -97,13 +97,14 @@ code { font-family: "JetBrains Mono", Consolas, monospace; font-size: clamp(15px
 .tape-label { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 25px; }
 .tape-label span { font-size: 13px; font-weight: 800; }
 .tape-label small { color: var(--ink-soft); }
-.tape-track { min-height: 68px; display: flex; align-items: center; }
+.tape-scroll { width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin; }
+.tape-track { width: max-content; min-width: 100%; min-height: 68px; display: flex; align-items: center; padding: 2px 0 8px; }
 .tape-step { display: contents; }
-.value-node, .unknown-node, .boundary-node > span { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; font-family: "JetBrains Mono", Consolas, monospace; font-weight: 800; }
+.value-node, .unknown-node, .boundary-node > span { width: 48px; height: 48px; flex: 0 0 48px; display: grid; place-items: center; border-radius: 50%; font-family: "JetBrains Mono", Consolas, monospace; font-weight: 800; }
 .value-node { color: white; background: var(--ink); box-shadow: 0 8px 20px rgba(16, 33, 63, 0.18); }
 .unknown-node { color: var(--ink-soft); border: 1px dashed #aebbd0; background: var(--surface); }
-.tape-step i { flex: 1; min-width: 24px; height: 2px; margin: 0 8px; background: linear-gradient(90deg, var(--cyan) 65%, transparent 65%); background-size: 10px 2px; }
-.boundary-node { display: grid; justify-items: center; gap: 5px; margin-left: 18px; }
+.tape-step i { flex: 1 0 32px; min-width: 32px; max-width: 76px; height: 2px; margin: 0 8px; background: linear-gradient(90deg, var(--cyan) 65%, transparent 65%); background-size: 10px 2px; }
+.boundary-node { flex: 0 0 auto; display: grid; justify-items: center; gap: 5px; margin-left: 18px; }
 .boundary-node > span { color: var(--red); border: 2px solid var(--red); background: var(--red-soft); text-decoration: line-through; }
 .boundary-node small { color: var(--red); font-size: 10px; }
 .feedback, .hint-panel { display: grid; gap: 7px; margin: 24px clamp(24px, 4.5vw, 52px) 0; padding: 16px 18px; border-radius: 10px; }
@@ -114,6 +115,7 @@ code { font-family: "JetBrains Mono", Consolas, monospace; font-size: clamp(15px
 .hint-panel span { color: var(--cobalt); }
 .hint-panel p { margin: 0; line-height: 1.65; }
 .answer-form { padding: 28px clamp(24px, 4.5vw, 52px) 42px; }
+.answer-form > .error-state { min-height: auto; margin-bottom: 18px; padding: 16px; }
 .answer-form > label { display: block; margin-bottom: 10px; font-size: 13px; font-weight: 800; }
 .answer-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 .answer-row input { width: 100%; min-height: 50px; border: 1px solid #b9c6da; border-radius: 11px; padding: 0 15px; color: var(--ink); background: white; font-family: "JetBrains Mono", Consolas, monospace; }
@@ -217,7 +219,7 @@ code { font-family: "JetBrains Mono", Consolas, monospace; font-size: clamp(15px
   .answer-row { grid-template-columns: 1fr; }
   .answer-actions { align-items: flex-start; flex-direction: column; gap: 5px; }
   .tape-label { align-items: flex-start; flex-direction: column; }
-  .value-node, .unknown-node, .boundary-node > span { width: 40px; height: 40px; }
+  .value-node, .unknown-node, .boundary-node > span { width: 40px; height: 40px; flex-basis: 40px; }
   .evidence-heading { gap: 28px; }
   .next-evidence { align-items: flex-start; flex-direction: column; }
 }
@@ -225,4 +227,3 @@ code { font-family: "JetBrains Mono", Consolas, monospace; font-size: clamp(15px
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
-

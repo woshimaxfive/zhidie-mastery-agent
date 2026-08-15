@@ -6,6 +6,16 @@ $frontendRoot = Join-Path $projectRoot 'frontend'
 $venvRoot = Join-Path $projectRoot '.venv'
 $venvPython = Join-Path $venvRoot 'Scripts\python.exe'
 
+function Stop-ChildProcessTree {
+    param([int]$RootProcessId)
+
+    $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $RootProcessId" -ErrorAction SilentlyContinue
+    foreach ($child in $children) {
+        Stop-ChildProcessTree -RootProcessId $child.ProcessId
+    }
+    Stop-Process -Id $RootProcessId -Force -ErrorAction SilentlyContinue
+}
+
 if (-not (Test-Path -LiteralPath $venvPython -PathType Leaf)) {
     $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
     if ($null -eq $pythonCommand) {
@@ -77,7 +87,7 @@ try {
 finally {
     foreach ($process in @($frontendProcess, $backendProcess)) {
         if ($null -ne $process -and -not $process.HasExited) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            Stop-ChildProcessTree -RootProcessId $process.Id
         }
     }
 }

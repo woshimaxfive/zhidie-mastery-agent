@@ -1,5 +1,4 @@
 import type {
-  ApiErrorPayload,
   AttemptResponse,
   EvidenceResponse,
   HomeResponse,
@@ -21,6 +20,18 @@ export class ApiError extends Error {
   }
 }
 
+function readApiError(payload: unknown): { message?: string; code?: string; retryable?: boolean } | null {
+  if (payload === null || typeof payload !== "object") return null;
+  const error = (payload as Record<string, unknown>).error;
+  if (error === null || typeof error !== "object") return null;
+  const candidate = error as Record<string, unknown>;
+  return {
+    message: typeof candidate.message === "string" ? candidate.message : undefined,
+    code: typeof candidate.code === "string" ? candidate.code : undefined,
+    retryable: typeof candidate.retryable === "boolean" ? candidate.retryable : undefined,
+  };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -32,11 +43,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError("无法连接学习服务。请确认后端已经启动，然后重试。", "NETWORK_ERROR", true);
   }
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    const payload: unknown = await response.json().catch(() => null);
+    const apiError = readApiError(payload);
     throw new ApiError(
-      payload?.error.message ?? "请求未完成，请稍后重试。",
-      payload?.error.code ?? "HTTP_ERROR",
-      payload?.error.retryable ?? response.status >= 500,
+      apiError?.message ?? "请求未完成，请检查输入后重试。",
+      apiError?.code ?? "HTTP_ERROR",
+      apiError?.retryable ?? response.status >= 500,
     );
   }
   return (await response.json()) as T;
@@ -60,10 +72,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ task_id: taskId, expected_revision: revision }),
     }),
-  evidence: () => request<EvidenceResponse>("/knowledge-points/python.range/evidence"),
+  evidence: (knowledgePointId: string) =>
+    request<EvidenceResponse>(`/knowledge-points/${encodeURIComponent(knowledgePointId)}/evidence`),
   trace: async (sessionId: string) => {
     const response = await request<{ session_id: string; items: TraceItem[] }>(`/sessions/${sessionId}/trace`);
     return response.items;
   },
 };
-
