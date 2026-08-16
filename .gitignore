@@ -6,6 +6,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -17,6 +18,9 @@ node_modules/
 dist/
 .vite/
 coverage/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
 
 # Local runtime data
 *.db
@@ -34,7 +38,8 @@ Thumbs.db
 *.log
 tmp/
 temp/
+.playwright-cli/
+output/playwright/
 
 # Private contest source materials
 private-materials/
-
