@@ -28,6 +28,8 @@ v0.1 提供一条可运行的纵向切片，聚焦 Python `range()`，但产品�
 
 需要 Python 3.11+、Node.js 20+ 和 pnpm。
 
+第一次使用可以先阅读[使用指南](docs/USER_GUIDE.md)，了解诊断、提示、迁移验证和掌握证据的完整操作流程。
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1
 ```
