@@ -49,3 +49,11 @@ jobs:
       - name: Run repository checks
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
+
+      - name: Install Chromium for browser tests
+        shell: pwsh
+        run: pnpm --dir frontend exec playwright install chromium
+
+      - name: Run browser learning flow
+        shell: pwsh
+        run: pnpm --dir frontend test:e2e

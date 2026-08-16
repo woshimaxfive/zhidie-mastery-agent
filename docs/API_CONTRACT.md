@@ -103,7 +103,7 @@ trace_status:
 }
 ```
 
-没有现有会话时，`action` 为 `start_session`，`session_id` 为 `null`。最近一次迁移使用过提示、仍待独立验证时，`action` 为 `start_transfer_verification`；前端创建的新会话会直接进入无提示迁移任务。
+没有现有会话时，`action` 为 `start_session`，`session_id` 为 `null`。最近一次迁移使用过提示、仍待独立验证时，`action` 为 `start_transfer_verification`；前端创建的新会话会直接进入无提示迁移任务，并使用不同于上一会话的迁移变式。
 
 ## 5. 学习会话
 
@@ -255,7 +255,7 @@ trace_status:
 }
 ```
 
-响应包含新的 `revision`、当前提示、Agent 决策和 Trace 摘要。后端负责限制最高提示级别，并保证提示内容不直接给出答案。
+响应包含新的 `revision`、当前提示、Agent 决策和 Trace 摘要。后端负责根据最近诊断码选择提示路径、限制最高提示级别，并保证提示内容不直接给出答案。诊断码和会话迁移变式均由后端持久化，因此刷新页面不会改变当前提示或题目。
 
 ## 7. 掌握证据
 

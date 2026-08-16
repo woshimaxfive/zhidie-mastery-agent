@@ -2,10 +2,27 @@ from __future__ import annotations
 
 import ast
 import re
+from dataclasses import dataclass
 
 
 DIAGNOSTIC_EXPECTED = [2, 5, 8]
-TRANSFER_EXPECTED = [1, 4, 7, 10]
+
+
+@dataclass(frozen=True)
+class TransferVariant:
+    id: str
+    target_sequence: tuple[int, ...]
+
+
+TRANSFER_VARIANTS = (
+    TransferVariant("range-transfer-01", (1, 4, 7, 10)),
+    TransferVariant("range-transfer-02", (3, 7, 11, 15)),
+    TransferVariant("range-transfer-03", (-2, 1, 4, 7)),
+    TransferVariant("range-transfer-04", (10, 7, 4, 1)),
+    TransferVariant("range-transfer-05", (2, 6, 10)),
+)
+DEFAULT_TRANSFER_VARIANT_ID = TRANSFER_VARIANTS[0].id
+TRANSFER_EXPECTED = list(TRANSFER_VARIANTS[0].target_sequence)
 
 
 class AnswerFormatError(ValueError):
@@ -68,14 +85,60 @@ def parse_range_parameters(raw: str) -> tuple[list[int], list[int]]:
     return params, generated
 
 
-DIAGNOSTIC_HINTS = {
+DEFAULT_DIAGNOSTIC_HINTS = {
     1: "先判断停止值本身是否会被包含。",
     2: "从起始值 2 开始，每次增加 3，并在到达停止边界前停下。",
     3: "依次检查 2、2+3、再加 3；下一次增加前先和停止值 10 比较。",
 }
 
-TRANSFER_HINTS = {
-    1: "先从相邻两项的差确定步长。",
-    2: "起始值是第一项；停止值必须让 10 被生成，但不能让下一项出现。",
-    3: "把 start、stop、step 分别对应到第一项、停止边界和相邻项差，再检查实际序列。",
+DIAGNOSTIC_HINTS_BY_CODE = {
+    "STOP_VALUE_INCLUDED": {
+        1: "先单独判断：range() 的停止值本身会不会进入序列？",
+        2: "每次准备加入新值时，都要先确认它仍在停止边界以内。",
+        3: "从 2 开始反复增加 3；当下一项到达或越过 10 时就停止。",
+    },
+    "START_VALUE_IGNORED": {
+        1: "先确认三个参数中，哪一个决定序列的第一项。",
+        2: "range(start, stop, step) 会从 start 指定的值开始，而不是默认从 0 开始。",
+        3: "把第一个参数 2 直接写成首项，再从它开始按步长向后推。",
+    },
+    "STEP_MISUNDERSTOOD": {
+        1: "观察第三个参数，它决定相邻两项之间相差多少。",
+        2: "这里的步长是 3，得到一项后应增加 3，而不是增加 1。",
+        3: "从起始值 2 开始，每次只做一次“当前值 + 3”，同时检查停止边界。",
+    },
+    "STOP_BOUNDARY_MISUNDERSTOOD": {
+        1: "计算出下一项后，先判断它是否仍满足停止边界。",
+        2: "停止值不是必须命中的终点；下一项越过停止值时也应停止。",
+        3: "逐项增加 3，并只保留严格小于停止值 10 的结果。",
+    },
+    "SEQUENCE_MISMATCH": DEFAULT_DIAGNOSTIC_HINTS,
 }
+
+def diagnostic_hint(diagnosis_code: str | None, level: int) -> str:
+    hints = DIAGNOSTIC_HINTS_BY_CODE.get(diagnosis_code, DEFAULT_DIAGNOSTIC_HINTS)
+    return hints[level]
+
+
+def transfer_hint(target_sequence: list[int] | tuple[int, ...], level: int) -> str:
+    if level == 1:
+        return "先从目标序列中相邻两项的差确定步长。"
+    if level == 2:
+        return (
+            f"起始值是第一项；停止值必须让末项 {target_sequence[-1]} 被生成，"
+            "但不能让下一项出现。"
+        )
+    return "把 start、stop、step 分别对应到第一项、停止边界和相邻项差，再执行检查。"
+
+
+def transfer_variant(variant_id: str | None) -> TransferVariant:
+    for variant in TRANSFER_VARIANTS:
+        if variant.id == variant_id:
+            return variant
+    return TRANSFER_VARIANTS[0]
+
+
+def next_transfer_variant_id(previous_variant_id: str | None) -> str:
+    current = transfer_variant(previous_variant_id)
+    current_index = TRANSFER_VARIANTS.index(current)
+    return TRANSFER_VARIANTS[(current_index + 1) % len(TRANSFER_VARIANTS)].id

@@ -47,6 +47,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 h1, h2, h3, p { overflow-wrap: anywhere; }
 h1 { margin: 0; font-size: clamp(38px, 5.4vw, 72px); line-height: 1.05; letter-spacing: -0.045em; }
 .lead { max-width: 650px; margin: 24px 0 34px; color: var(--ink-soft); font-size: clamp(17px, 2vw, 21px); line-height: 1.75; }
+.home-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 11px; padding: 0 20px; font-weight: 760; cursor: pointer; text-decoration: none; transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease; }
 .button:hover:not(:disabled) { transform: translateY(-1px); }
 .button:disabled { cursor: wait; opacity: 0.58; }

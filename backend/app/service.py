@@ -9,14 +9,16 @@ from fastapi import HTTPException
 
 from .database import connect
 from .rules import (
+    DEFAULT_TRANSFER_VARIANT_ID,
     DIAGNOSTIC_EXPECTED,
-    DIAGNOSTIC_HINTS,
-    TRANSFER_EXPECTED,
-    TRANSFER_HINTS,
     AnswerFormatError,
+    diagnostic_hint,
     diagnose_diagnostic_answer,
+    next_transfer_variant_id,
     parse_integer_list,
     parse_range_parameters,
+    transfer_hint,
+    transfer_variant,
 )
 from .schemas import (
     AgentDecision,
@@ -65,7 +67,7 @@ def api_error(status: int, code: str, message: str, *, field: str | None = None)
     )
 
 
-def task_for_phase(phase: str) -> TaskView:
+def task_for_phase(phase: str, transfer_variant_id: str = DEFAULT_TRANSFER_VARIANT_ID) -> TaskView:
     if phase in {"diagnostic", "guided_practice"}:
         return TaskView(
             id="range-diagnostic-01",
@@ -74,11 +76,12 @@ def task_for_phase(phase: str) -> TaskView:
             code="list(range(2, 10, 3))",
             answer_format="python_list",
         )
+    variant = transfer_variant(transfer_variant_id)
     return TaskView(
-        id="range-transfer-01",
+        id=variant.id,
         kind="parameter_construction",
         prompt="构造一组 range() 参数，使它生成目标序列。",
-        target_sequence=TRANSFER_EXPECTED,
+        target_sequence=list(variant.target_sequence),
         answer_format="range_parameters",
     )
 
@@ -135,13 +138,18 @@ def session_from_row(connection, row) -> SessionView:
     ).fetchone()["count"]
     hint = None
     if row["current_hint_level"]:
-        hints = TRANSFER_HINTS if row["phase"] == "transfer_check" else DIAGNOSTIC_HINTS
-        hint = HintView(level=row["current_hint_level"], content=hints[row["current_hint_level"]])
+        variant = transfer_variant(row["transfer_variant_id"])
+        hint_content = (
+            transfer_hint(variant.target_sequence, row["current_hint_level"])
+            if row["phase"] == "transfer_check"
+            else diagnostic_hint(row["last_diagnosis_code"], row["current_hint_level"])
+        )
+        hint = HintView(level=row["current_hint_level"], content=hint_content)
     return SessionView(
         session_id=row["id"],
         revision=row["revision"],
         session_phase=row["phase"],
-        task=task_for_phase(row["phase"]),
+        task=task_for_phase(row["phase"], row["transfer_variant_id"]),
         hint=hint,
         highest_hint_level=row["highest_hint_level"],
         attempt_count=count,
@@ -280,6 +288,17 @@ def create_session(knowledge_point_id: str) -> SessionEnvelope:
     timestamp = now_iso()
     with connect() as connection:
         profile = get_mastery_profile(connection)
+        previous_session = connection.execute(
+            """SELECT transfer_variant_id FROM sessions
+               WHERE learner_id = ? AND knowledge_point_id = ?
+               ORDER BY updated_at DESC LIMIT 1""",
+            (LEARNER_ID, KNOWLEDGE_POINT_ID),
+        ).fetchone()
+        transfer_variant_id = (
+            next_transfer_variant_id(previous_session["transfer_variant_id"])
+            if previous_session is not None
+            else DEFAULT_TRANSFER_VARIANT_ID
+        )
         mastery_state = profile["mastery_state"] if profile else "unassessed"
         evidence_level = profile["evidence_level"] if profile else "none"
         mastery_reason = profile["mastery_reason"] if profile else "尚无作答证据。"
@@ -287,8 +306,9 @@ def create_session(knowledge_point_id: str) -> SessionEnvelope:
         connection.execute(
             """INSERT INTO sessions
                (id, learner_id, knowledge_point_id, phase, revision, current_hint_level,
-                highest_hint_level, mastery_state, evidence_level, mastery_reason, created_at, updated_at)
-               VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?, ?, ?, ?)""",
+                highest_hint_level, mastery_state, evidence_level, mastery_reason,
+                transfer_variant_id, last_diagnosis_code, created_at, updated_at)
+               VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?, ?, ?, NULL, ?, ?)""",
             (
                 session_id,
                 LEARNER_ID,
@@ -297,6 +317,7 @@ def create_session(knowledge_point_id: str) -> SessionEnvelope:
                 mastery_state,
                 evidence_level,
                 mastery_reason,
+                transfer_variant_id,
                 timestamp,
                 timestamp,
             ),
@@ -310,7 +331,11 @@ def create_session(knowledge_point_id: str) -> SessionEnvelope:
             "create_learning_session",
             "建立学习会话",
             "Python range()",
-            f"进入{'迁移验证' if phase == 'transfer_check' else '诊断'}阶段",
+            (
+                f"进入迁移验证阶段，题目变式={transfer_variant_id}"
+                if phase == "transfer_check"
+                else f"进入诊断阶段，预留迁移变式={transfer_variant_id}"
+            ),
         )
         return SessionEnvelope(
             session=session_from_row(connection, row),
@@ -338,7 +363,7 @@ def require_current_session(connection, session_id: str, task_id: str, expected_
         raise api_error(404, "SESSION_NOT_FOUND", "学习会话不存在。")
     if row["revision"] != expected_revision:
         raise api_error(409, "STALE_SESSION_REVISION", "会话已在其他页面更新，请刷新后继续。")
-    expected_task = task_for_phase(row["phase"])
+    expected_task = task_for_phase(row["phase"], row["transfer_variant_id"])
     if expected_task.id != task_id:
         raise api_error(409, "TASK_MISMATCH", "当前任务已经变化，请刷新页面。")
     if row["phase"] == "completed":
@@ -354,7 +379,8 @@ def submit_attempt(session_id: str, task_id: str, raw_answer: str, expected_revi
         try:
             if row["phase"] == "transfer_check":
                 normalized, generated = parse_range_parameters(raw_answer)
-                correct = generated == TRANSFER_EXPECTED
+                target_sequence = list(transfer_variant(row["transfer_variant_id"]).target_sequence)
+                correct = generated == target_sequence
                 diagnosis_code = None if correct else "TRANSFER_SEQUENCE_MISMATCH"
                 diagnosis = (
                     "参数可以生成目标序列。" if correct else f"这组参数实际生成 {generated}，还没有得到目标序列。"
@@ -447,12 +473,23 @@ def submit_attempt(session_id: str, task_id: str, raw_answer: str, expected_revi
             ),
         )
         next_hint_level = 0 if correct else hint_level
+        next_diagnosis_code = None if correct else diagnosis_code
         connection.execute(
             """UPDATE sessions
                SET phase = ?, revision = revision + 1, current_hint_level = ?,
-                   mastery_state = ?, evidence_level = ?, mastery_reason = ?, updated_at = ?
+                    mastery_state = ?, evidence_level = ?, mastery_reason = ?,
+                    last_diagnosis_code = ?, updated_at = ?
                WHERE id = ?""",
-            (phase, next_hint_level, mastery_state, evidence_level, mastery_reason, timestamp, session_id),
+            (
+                phase,
+                next_hint_level,
+                mastery_state,
+                evidence_level,
+                mastery_reason,
+                next_diagnosis_code,
+                timestamp,
+                session_id,
+            ),
         )
         save_mastery_profile(connection, mastery_state, evidence_level, mastery_reason, timestamp)
         if evidence_summary is not None:
@@ -523,8 +560,11 @@ def request_hint(session_id: str, task_id: str, expected_revision: int) -> Sessi
             session_id,
             "select_hint",
             "选择提示",
-            f"当前阶段={row['phase']}，已有提示等级={row['current_hint_level']}",
-            f"提供 {next_level} 级提示",
+            (
+                f"当前阶段={row['phase']}，已有提示等级={row['current_hint_level']}，"
+                f"诊断码={row['last_diagnosis_code'] or 'NONE'}"
+            ),
+            f"提供 {next_level} 级提示，题目变式={row['transfer_variant_id']}",
         )
         return SessionEnvelope(
             session=session_from_row(connection, updated),

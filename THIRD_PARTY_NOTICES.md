@@ -14,6 +14,7 @@
 | TypeScript | 7.0.2 | Apache-2.0 | <https://github.com/microsoft/TypeScript> |
 | Vite | 8.2.1 | MIT | <https://github.com/vitejs/vite> |
 | Vite React plugin | 6.0.5 | MIT | <https://github.com/vitejs/vite-plugin-react> |
+| Playwright Test（开发） | 1.62.1 | Apache-2.0 | <https://github.com/microsoft/playwright> |
 | React type definitions | 19.2.18 | MIT | <https://github.com/DefinitelyTyped/DefinitelyTyped> |
 | React DOM type definitions | 19.2.4 | MIT | <https://github.com/DefinitelyTyped/DefinitelyTyped> |
 
