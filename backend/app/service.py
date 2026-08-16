@@ -38,7 +38,7 @@ from .schemas import (
 )
 
 
-LEARNER_ID = "demo-learner"
+LEARNER_ID = "local-learner"
 KNOWLEDGE_POINT_ID = "python.range"
 KNOWLEDGE_POINT_NAME = "Python range()"
 
@@ -275,7 +275,7 @@ def get_home() -> HomeResponse:
 
 def create_session(knowledge_point_id: str) -> SessionEnvelope:
     if knowledge_point_id != KNOWLEDGE_POINT_ID:
-        raise api_error(404, "KNOWLEDGE_POINT_NOT_FOUND", "当前版本只提供 Python range() 学习任务。")
+        raise api_error(404, "KNOWLEDGE_POINT_NOT_FOUND", "v0.1 只提供 Python range() 学习任务。")
     session_id = new_id("session")
     timestamp = now_iso()
     with connect() as connection:

@@ -13,7 +13,7 @@ EvidenceLevel = Literal["none", "assisted", "independent", "transfer_verified"]
 class LearnerSummary(BaseModel):
     id: str
     display_name: str
-    provider: str = "demo"
+    provider: str = "local"
 
 
 class MasterySummary(BaseModel):
