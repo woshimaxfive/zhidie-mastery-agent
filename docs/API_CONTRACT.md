@@ -1,6 +1,6 @@
 # 知迭 v0.1 API 契约
 
-状态：团队评审稿
+状态：v0.1
 
 ## 1. 原则
 
@@ -76,14 +76,14 @@ trace_status:
 
 ### `GET /api/v1/home`
 
-返回当前 Demo 学习者的下一步建议。
+返回当前本地体验学习者的下一步建议。
 
 ```json
 {
   "learner": {
-    "id": "demo-learner",
+    "id": "local-learner",
     "display_name": "体验学习者",
-    "provider": "demo"
+    "provider": "local"
   },
   "recommendation": {
     "knowledge_point_id": "python.range",
@@ -346,10 +346,10 @@ INTERNAL_ERROR            500  未分类服务端错误
 
 “证据不足”是正常领域结果，通过 `decision.mastery_effect` 和 `mastery.reason` 返回，不应作为 HTTP 错误。
 
-## 10. 前后端并行开发规则
+## 10. 契约维护规则
 
 - 前端根据本文档维护 TypeScript 类型和脱敏夹具。
 - 后端使用 Pydantic 模型实现同一契约，并导出 OpenAPI 文档。
-- 后端首个可运行版本完成后，团队比较 OpenAPI 与本文档。
+- OpenAPI、TypeScript 类型和本文档应保持同步。
 - 契约测试至少覆盖正常作答、提示后答对、独立迁移、格式错误和版本冲突。
-- 未经共同评审，不删除字段、不改变字段含义、不复用枚举值表达新含义。
+- 删除字段、改变字段含义或扩展枚举时，必须通过 Pull Request 记录兼容性影响。
