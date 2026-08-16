@@ -1,8 +1,38 @@
+import sqlite3
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.database import init_database
+
+
+def test_existing_database_receives_session_variant_columns(tmp_path: Path, monkeypatch):
+    database = tmp_path / "legacy.db"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                learner_id TEXT NOT NULL,
+                knowledge_point_id TEXT NOT NULL,
+                phase TEXT NOT NULL,
+                revision INTEGER NOT NULL,
+                current_hint_level INTEGER NOT NULL DEFAULT 0,
+                highest_hint_level INTEGER NOT NULL DEFAULT 0,
+                mastery_state TEXT NOT NULL,
+                evidence_level TEXT NOT NULL,
+                mastery_reason TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )"""
+        )
+    monkeypatch.setenv("MASTERY_DB_PATH", str(database))
+
+    init_database()
+
+    with sqlite3.connect(database) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(sessions)")}
+    assert {"transfer_variant_id", "last_diagnosis_code"} <= columns
 
 
 def test_independent_transfer_updates_mastery(tmp_path: Path, monkeypatch):
@@ -147,16 +177,43 @@ def test_pending_verification_can_start_fresh_transfer_session(tmp_path: Path, m
         retry = client.post("/api/v1/sessions", json={}).json()["session"]
         assert retry["session_phase"] == "transfer_check"
         assert retry["hint"] is None
+        assert retry["task"]["id"] == "range-transfer-02"
+        assert retry["task"]["target_sequence"] == [3, 7, 11, 15]
+
+        restored_retry = client.get(f"/api/v1/sessions/{retry['session_id']}").json()["session"]
+        assert restored_retry["task"] == retry["task"]
 
         verified = client.post(
             f"/api/v1/sessions/{retry['session_id']}/attempts",
             json={
-                "task_id": retry["task"]["id"],
-                "answer": "range(1, 11, 3)",
-                "expected_revision": retry["revision"],
+                "task_id": restored_retry["task"]["id"],
+                "answer": "range(3, 16, 4)",
+                "expected_revision": restored_retry["revision"],
             },
         ).json()
         assert verified["mastery"]["mastery_state"] == "mastered"
+
+
+def test_diagnosis_selects_matching_hint_and_survives_reload(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("MASTERY_DB_PATH", str(tmp_path / "personalized-hint.db"))
+    with TestClient(app) as client:
+        session = client.post("/api/v1/sessions", json={}).json()["session"]
+        wrong = client.post(
+            f"/api/v1/sessions/{session['session_id']}/attempts",
+            json={
+                "task_id": session["task"]["id"],
+                "answer": "[2, 3, 4]",
+                "expected_revision": session["revision"],
+            },
+        ).json()["session"]
+        hinted = client.post(
+            f"/api/v1/sessions/{session['session_id']}/hints",
+            json={"task_id": wrong["task"]["id"], "expected_revision": wrong["revision"]},
+        ).json()["session"]
+        assert "第三个参数" in hinted["hint"]["content"]
+
+        restored = client.get(f"/api/v1/sessions/{session['session_id']}").json()["session"]
+        assert restored["hint"] == hinted["hint"]
 
 
 def test_mastery_profile_and_evidence_survive_new_session(tmp_path: Path, monkeypatch):

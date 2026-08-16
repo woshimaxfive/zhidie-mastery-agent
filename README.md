@@ -17,9 +17,9 @@ v0.1 提供一条可运行的纵向切片，聚焦 Python `range()`，但产品�
 ## 已实现能力
 
 - 不同答案触发不同错因诊断；
-- 三级渐进提示，提示不直接给出答案；
+- 根据具体错因选择三级渐进提示，提示不直接给出答案；
 - 提示后答对只记录辅助证据；
-- 通过实际执行结果验证迁移题的等价参数；
+- 使用会话级迁移变式，并通过实际执行结果验证等价参数；
 - 只有无提示迁移成功才更新为已掌握；
 - 使用 SQLite 保存会话、作答、掌握证据和 Agent Trace；
 - 前端展示学习首页、任务工作台、掌握证据与执行记录；
@@ -70,6 +70,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 ```
 
 验证脚本运行后端测试和前端生产构建。
+
+完整浏览器闭环测试会启动隔离的前后端进程，并使用独立 SQLite 文件：
+
+```powershell
+pnpm --dir frontend exec playwright install chromium
+pnpm --dir frontend test:e2e
+```
 
 ## 项目文档
 

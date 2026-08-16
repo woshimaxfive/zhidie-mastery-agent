@@ -92,6 +92,18 @@ function HomePage() {
 
   useEffect(load, []);
 
+  const startNewSession = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await api.createSession();
+      navigate(`/learn/${created.session.session_id}`);
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : "无法建立学习会话。请稍后重试。");
+      setBusy(false);
+    }
+  };
+
   const continueLearning = async () => {
     if (!data) return;
     if (data.recommendation.action === "review_evidence") {
@@ -103,15 +115,7 @@ function HomePage() {
       navigate(`/learn/${data.recommendation.session_id}`);
       return;
     }
-    setBusy(true);
-    setError(null);
-    try {
-      const created = await api.createSession();
-      navigate(`/learn/${created.session.session_id}`);
-    } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "无法建立学习会话。请稍后重试。");
-      setBusy(false);
-    }
+    await startNewSession();
   };
 
   return (
@@ -125,17 +129,24 @@ function HomePage() {
               <p className="eyebrow">今天的学习起点</p>
               <h1 id="home-title">{data.recommendation.title}</h1>
               <p className="lead">{data.recommendation.reason}</p>
-              <button className="button primary" onClick={continueLearning} disabled={busy}>
-                {busy
-                  ? "正在建立会话…"
-                  : data.recommendation.action === "start_session"
-                    ? "开始诊断"
-                    : data.recommendation.action === "start_transfer_verification"
-                      ? "开始迁移验证"
-                      : data.recommendation.action === "resume_session"
-                        ? "继续学习"
-                        : "查看掌握证据"}
-              </button>
+              <div className="home-actions">
+                <button className="button primary" onClick={continueLearning} disabled={busy}>
+                  {busy
+                    ? "正在建立会话…"
+                    : data.recommendation.action === "start_session"
+                      ? "开始诊断"
+                      : data.recommendation.action === "start_transfer_verification"
+                        ? "开始迁移验证"
+                        : data.recommendation.action === "resume_session"
+                          ? "继续学习"
+                          : "查看掌握证据"}
+                </button>
+                {data.mastery.mastery_state === "mastered" && (
+                  <button className="button secondary" onClick={startNewSession} disabled={busy}>
+                    再练一次
+                  </button>
+                )}
+              </div>
             </section>
 
             <section className="home-evidence" aria-labelledby="evidence-summary-title">

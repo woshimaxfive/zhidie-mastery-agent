@@ -47,6 +47,8 @@ def init_database() -> None:
                 mastery_state TEXT NOT NULL,
                 evidence_level TEXT NOT NULL,
                 mastery_reason TEXT NOT NULL,
+                transfer_variant_id TEXT NOT NULL DEFAULT 'range-transfer-01',
+                last_diagnosis_code TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -117,3 +119,14 @@ def init_database() -> None:
             );
             """
         )
+
+        session_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        if "transfer_variant_id" not in session_columns:
+            connection.execute(
+                "ALTER TABLE sessions ADD COLUMN transfer_variant_id TEXT NOT NULL "
+                "DEFAULT 'range-transfer-01'"
+            )
+        if "last_diagnosis_code" not in session_columns:
+            connection.execute("ALTER TABLE sessions ADD COLUMN last_diagnosis_code TEXT")
