@@ -78,6 +78,8 @@ class SessionView(BaseModel):
     session_phase: SessionPhase
     task: TaskView
     hint: HintView | None
+    # 渐进提示按等级累积返回，前端需要同时展示已解锁的每一层，避免"渐进"链条断裂。
+    hint_history: list[HintView] = []
     highest_hint_level: int = 0
     attempt_count: int = 0
     created_at: str

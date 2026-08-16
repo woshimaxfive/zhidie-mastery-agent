@@ -56,6 +56,7 @@ export interface SessionView {
   session_phase: SessionPhase;
   task: TaskView;
   hint: HintView | null;
+  hint_history: HintView[];
   highest_hint_level: number;
   attempt_count: number;
   created_at: string;

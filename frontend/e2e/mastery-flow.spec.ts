@@ -26,6 +26,7 @@ test("独立掌握、错因提示与新变式复验形成完整证据链", async
   });
 
   await page.goto("/");
+  await captureGuideScreenshot("home.png", page);
   await page.getByRole("button", { name: "开始诊断" }).click();
 
   await page.getByLabel("你的答案").fill("[2, 5, 8]");
@@ -41,12 +42,25 @@ test("独立掌握、错因提示与新变式复验形成完整证据链", async
   await captureGuideScreenshot("repractice.png", page);
   await page.getByRole("button", { name: "再练一次" }).click();
 
+  // 同一道题的两种错误应得到两种诊断：先验证停止值错因，再验证步长错因。
+  await page.getByLabel("你的答案").fill("[2, 5, 8, 10]");
+  await page.getByRole("button", { name: "提交答案" }).click();
+  await expect(page.locator(".feedback").getByText("你把停止值 10 也包含进结果了。")).toBeVisible();
+  await expect(page.locator(".boundary-node")).toBeVisible();
+  await captureGuideScreenshot("diagnosis.png", page);
+
   await page.getByLabel("你的答案").fill("[2, 3, 4]");
   await page.getByRole("button", { name: "提交答案" }).click();
   await expect(page.locator(".feedback").getByText("你把步长 3 理解成了每次增加 1。")).toBeVisible();
+  await expect(page.locator(".execution-tape.learner-error")).toBeVisible();
   await page.getByRole("button", { name: "我需要一点提示" }).click();
-  await expect(page.locator(".hint-panel").getByText(/第三个参数.*相邻两项/)).toBeVisible();
+  await expect(page.locator(".hint-panel.latest").getByText(/第三个参数.*相邻两项/)).toBeVisible();
   await captureGuideScreenshot("personalized-hint.png", page);
+
+  // 第二层提示解锁后，第一层仍需保留可见，渐进过程才可复查。
+  await page.getByRole("button", { name: "我需要一点提示" }).click();
+  await expect(page.locator(".hint-panel")).toHaveCount(2);
+  await expect(page.locator(".hint-panel.earlier").getByText(/第三个参数.*相邻两项/)).toBeVisible();
 
   await page.getByLabel("你的答案").fill("[2, 5, 8]");
   await page.getByRole("button", { name: "提交答案" }).click();

@@ -136,21 +136,26 @@ def session_from_row(connection, row) -> SessionView:
     count = connection.execute(
         "SELECT COUNT(*) AS count FROM attempts WHERE session_id = ?", (row["id"],)
     ).fetchone()["count"]
-    hint = None
-    if row["current_hint_level"]:
-        variant = transfer_variant(row["transfer_variant_id"])
-        hint_content = (
-            transfer_hint(variant.target_sequence, row["current_hint_level"])
-            if row["phase"] == "transfer_check"
-            else diagnostic_hint(row["last_diagnosis_code"], row["current_hint_level"])
-        )
-        hint = HintView(level=row["current_hint_level"], content=hint_content)
+    # 提示按等级累积：前端要展示 1..current 每一层，只给最后一层会让"渐进引导"无法被复查。
+    variant = transfer_variant(row["transfer_variant_id"])
+
+    def hint_at(level: int) -> str:
+        if row["phase"] == "transfer_check":
+            return transfer_hint(variant.target_sequence, level)
+        return diagnostic_hint(row["last_diagnosis_code"], level)
+
+    hint_history = [
+        HintView(level=level, content=hint_at(level))
+        for level in range(1, row["current_hint_level"] + 1)
+    ]
+    hint = hint_history[-1] if hint_history else None
     return SessionView(
         session_id=row["id"],
         revision=row["revision"],
         session_phase=row["phase"],
         task=task_for_phase(row["phase"], row["transfer_variant_id"]),
         hint=hint,
+        hint_history=hint_history,
         highest_hint_level=row["highest_hint_level"],
         attempt_count=count,
         created_at=row["created_at"],

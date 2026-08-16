@@ -41,8 +41,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .site-header nav a:hover { color: var(--cobalt); }
 
 .home-page, .learn-page, .evidence-page, .page-frame { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
-.home-page { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(290px, 0.75fr); gap: 28px; padding: clamp(54px, 8vw, 112px) 0 64px; }
-.home-intro { padding: 24px 4vw 48px 0; align-self: center; }
+.home-page { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(290px, 0.75fr); align-items: start; gap: 28px; padding: clamp(54px, 8vw, 112px) 0 64px; }
+.home-intro { padding: 0 4vw 48px 0; }
 .eyebrow { margin: 0 0 14px; color: var(--cobalt); font-size: 12px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
 h1, h2, h3, p { overflow-wrap: anywhere; }
 h1 { margin: 0; font-size: clamp(38px, 5.4vw, 72px); line-height: 1.05; letter-spacing: -0.045em; }
@@ -55,10 +55,10 @@ h1 { margin: 0; font-size: clamp(38px, 5.4vw, 72px); line-height: 1.05; letter-s
 .button.primary:hover:not(:disabled) { background: var(--cobalt-dark); }
 .button.secondary { color: var(--cobalt); background: #eaf0ff; }
 .button.ghost { width: 100%; border: 1px solid var(--line); color: var(--ink); background: transparent; box-shadow: none; }
-.home-evidence { min-height: 360px; padding: 34px; border: 1px solid var(--line); border-radius: 20px 20px 20px 5px; background: var(--surface); box-shadow: var(--shadow); align-self: center; }
+.home-evidence { padding: 34px; border: 1px solid var(--line); border-radius: 20px 20px 20px 5px; background: var(--surface); box-shadow: var(--shadow); }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.home-evidence h2 { margin: 42px 0 12px; font-size: 28px; }
-.home-evidence > p { min-height: 62px; color: var(--ink-soft); line-height: 1.75; }
+.home-evidence h2 { margin: 28px 0 12px; font-size: 28px; }
+.home-evidence > p { color: var(--ink-soft); line-height: 1.75; }
 .evidence-level-row { display: flex; justify-content: space-between; margin: 28px 0 22px; padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 14px; }
 .evidence-level-row span { color: var(--ink-soft); }
 .text-link, .text-button { color: var(--cobalt); font-weight: 750; text-decoration: none; }
@@ -69,6 +69,12 @@ h1 { margin: 0; font-size: clamp(38px, 5.4vw, 72px); line-height: 1.05; letter-s
 .learning-path article > span { color: var(--cyan); font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; font-weight: 800; }
 .learning-path h3 { margin: 14px 0 8px; font-size: 17px; }
 .learning-path p { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 1.65; }
+/* 当前环节加重、已过环节收敛、未到环节淡出，让四步反映真实进度。 */
+.learning-path article.current { box-shadow: inset 0 2px 0 var(--cobalt); }
+.learning-path article.current > span { color: var(--cobalt); }
+.learning-path article.current h3 { color: var(--cobalt-dark); }
+.learning-path article.done > span { color: var(--green); }
+.learning-path article.upcoming { opacity: 0.55; }
 
 .status-badge { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .status-unassessed { color: var(--ink-soft); background: #edf1f7; }
@@ -95,6 +101,10 @@ code { font-family: "JetBrains Mono", Consolas, monospace; font-size: clamp(15px
 .target-sequence { display: flex; align-items: center; gap: 16px; padding: 18px 20px; border-left: 4px solid var(--cyan); border-radius: 5px 12px 12px 5px; background: #edf9fb; color: var(--ink-soft); }
 .target-sequence strong { color: var(--ink); font-family: "JetBrains Mono", Consolas, monospace; font-size: 18px; }
 .execution-tape { padding: 28px clamp(24px, 4.5vw, 52px) 34px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: linear-gradient(90deg, rgba(35, 175, 192, 0.045), transparent 70%); }
+/* 展示的是学习者的错误理解，用琥珀色底与实心深色节点区分，避免读成系统给出的正确执行。 */
+.execution-tape.learner-error { background: linear-gradient(90deg, rgba(217, 145, 32, 0.07), transparent 70%); }
+.execution-tape.learner-error .tape-label small { color: #8a5710; }
+.tape-empty { min-height: 68px; display: flex; align-items: center; margin: 0; color: var(--ink-soft); font-size: 14px; }
 .tape-label { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 25px; }
 .tape-label span { font-size: 13px; font-weight: 800; }
 .tape-label small { color: var(--ink-soft); }
@@ -103,18 +113,25 @@ code { font-family: "JetBrains Mono", Consolas, monospace; font-size: clamp(15px
 .tape-step { display: contents; }
 .value-node, .unknown-node, .boundary-node > span { width: 48px; height: 48px; flex: 0 0 48px; display: grid; place-items: center; border-radius: 50%; font-family: "JetBrains Mono", Consolas, monospace; font-weight: 800; }
 .value-node { color: white; background: var(--ink); box-shadow: 0 8px 20px rgba(16, 33, 63, 0.18); }
+.value-node.learner-node { color: #8a5710; border: 2px solid var(--amber); background: var(--amber-soft); box-shadow: none; }
 .unknown-node { color: var(--ink-soft); border: 1px dashed #aebbd0; background: var(--surface); }
 .tape-step i { flex: 1 0 32px; min-width: 32px; max-width: 76px; height: 2px; margin: 0 8px; background: linear-gradient(90deg, var(--cyan) 65%, transparent 65%); background-size: 10px 2px; }
 .boundary-node { flex: 0 0 auto; display: grid; justify-items: center; gap: 5px; margin-left: 18px; }
 .boundary-node > span { color: var(--red); border: 2px solid var(--red); background: var(--red-soft); text-decoration: line-through; }
 .boundary-node small { color: var(--red); font-size: 10px; }
-.feedback, .hint-panel { display: grid; gap: 7px; margin: 24px clamp(24px, 4.5vw, 52px) 0; padding: 16px 18px; border-radius: 10px; }
+.feedback, .hint-stack { display: grid; gap: 7px; margin: 24px clamp(24px, 4.5vw, 52px) 0; }
+.feedback { padding: 16px 18px; border-radius: 10px; }
 .feedback span, .hint-panel span { font-size: 11px; font-weight: 850; letter-spacing: 0.08em; }
 .feedback.correct { color: #0f6b55; background: var(--green-soft); }
 .feedback.needs-work { color: #8a5710; background: var(--amber-soft); }
-.hint-panel { border-left: 3px solid var(--cobalt); background: #f0f4ff; }
+.hint-stack { gap: 8px; }
+.hint-panel { display: grid; gap: 7px; padding: 16px 18px; border-left: 3px solid var(--cobalt); border-radius: 10px; background: #f0f4ff; }
 .hint-panel span { color: var(--cobalt); }
 .hint-panel p { margin: 0; line-height: 1.65; }
+/* 早期提示保留但降低权重，视线自然落在最新解锁的那一层。 */
+.hint-panel.earlier { border-left-color: #b9c6da; background: #f4f7fc; }
+.hint-panel.earlier span { color: var(--ink-soft); }
+.hint-panel.earlier p { color: var(--ink-soft); font-size: 14px; }
 .answer-form { padding: 28px clamp(24px, 4.5vw, 52px) 42px; }
 .answer-form > .error-state { min-height: auto; margin-bottom: 18px; padding: 16px; }
 .answer-form > label { display: block; margin-bottom: 10px; font-size: 13px; font-weight: 800; }
@@ -126,7 +143,7 @@ code { font-family: "JetBrains Mono", Consolas, monospace; font-size: clamp(15px
 .decision-panel { position: sticky; top: 98px; padding: 28px; border: 1px solid var(--line); border-radius: 16px 16px 16px 4px; background: rgba(255, 255, 255, 0.88); }
 .decision-panel h2 { margin: 0 0 12px; font-size: 23px; line-height: 1.3; }
 .decision-panel > p:not(.eyebrow) { color: var(--ink-soft); font-size: 14px; line-height: 1.7; }
-.decision-rule { height: 1px; margin: 24px 0; background: var(--line); }
+.decision-rule { height: 1px; margin: 24px 0; border: 0; background: var(--line); }
 .decision-panel dl { margin: 0 0 26px; }
 .decision-panel dl > div { margin-bottom: 20px; }
 .decision-panel dt { margin-bottom: 7px; color: var(--ink-soft); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; }
@@ -193,9 +210,10 @@ code { font-family: "JetBrains Mono", Consolas, monospace; font-size: clamp(15px
 @media (max-width: 900px) {
   .home-page, .evidence-heading, .evidence-grid { grid-template-columns: 1fr; }
   .home-intro { padding-right: 0; }
-  .home-evidence { min-height: auto; }
   .workspace-grid { grid-template-columns: 1fr; }
-  .decision-panel { position: static; }
+  /* 单列时把 Agent 决策提到任务卡之前：它是产品的核心解释，不能沉到页面底部才被看到。 */
+  .decision-panel { position: static; order: -1; }
+  .task-workspace { min-height: auto; }
   .learn-heading { align-items: flex-start; flex-direction: column; }
   .phase-rail { width: 100%; }
   .phase-rail li { flex: 1; }

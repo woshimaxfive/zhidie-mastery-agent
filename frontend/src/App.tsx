@@ -40,6 +40,21 @@ const EVIDENCE_LABELS: Record<EvidenceLevel, string> = {
   transfer_verified: "迁移已验证",
 };
 
+const LOOP_STEPS = [
+  { number: "01", title: "诊断理解", description: "从真实作答识别具体错因" },
+  { number: "02", title: "渐进引导", description: "只提供当前需要的一层提示" },
+  { number: "03", title: "迁移验证", description: "换一种任务确认能够独立应用" },
+  { number: "04", title: "更新证据", description: "依据行为记录决定下一步" },
+] as const;
+
+// 掌握状态到闭环步骤的映射：让首页四步显示学习者当前所处环节，而不是一段静态说明。
+const ACTIVE_LOOP_STEP: Record<MasteryState, number> = {
+  unassessed: 0,
+  learning: 1,
+  pending_verification: 2,
+  mastered: 3,
+};
+
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell">
@@ -163,19 +178,19 @@ function HomePage() {
               <Link className="text-link" to={`/evidence/${encodeURIComponent(data.mastery.knowledge_point_id)}`}>查看完整证据 →</Link>
             </section>
 
+            {/* 四步不是静态说明：按当前掌握状态标出学习者所处的环节，让首页反映真实进度。 */}
             <section className="learning-path" aria-label="掌握学习路径">
-              {[
-                ["01", "诊断理解", "从真实作答识别具体错因"],
-                ["02", "渐进引导", "只提供当前需要的一层提示"],
-                ["03", "迁移验证", "换一种任务确认能够独立应用"],
-                ["04", "更新证据", "依据行为记录决定下一步"],
-              ].map(([number, title, description]) => (
-                <article key={number}>
-                  <span>{number}</span>
-                  <h3>{title}</h3>
-                  <p>{description}</p>
-                </article>
-              ))}
+              {LOOP_STEPS.map((step, index) => {
+                const activeIndex = ACTIVE_LOOP_STEP[data.mastery.mastery_state];
+                const state = index === activeIndex ? "current" : index < activeIndex ? "done" : "upcoming";
+                return (
+                  <article key={step.number} className={state} aria-current={state === "current" || undefined}>
+                    <span>{step.number}</span>
+                    <h3>{step.title}</h3>
+                    <p>{step.description}</p>
+                  </article>
+                );
+              })}
             </section>
           </>
         )}
@@ -198,31 +213,45 @@ function PhaseRail({ current }: { current: SessionPhase }) {
   );
 }
 
-function ExecutionTape({ envelope, feedback }: { envelope: SessionEnvelope; feedback: AttemptResponse["attempt"] | null }) {
-  const transfer = envelope.session.task.kind === "parameter_construction";
-  const sequence = transfer ? envelope.session.task.target_sequence ?? [] : feedback?.normalized_answer ?? [];
-  const showsIncludedBoundary = !transfer && feedback?.diagnosis_code === "STOP_VALUE_INCLUDED";
+// 展开学习者本次作答的每一项取值。答错时展示的是学习者自己的理解，不是正确执行结果，
+// 因此标题和节点配色都要与"正确"区分开，否则会被误读成系统在演示标准答案。
+function ExecutionTape({ feedback }: { feedback: AttemptResponse["attempt"] | null }) {
+  const sequence = feedback?.normalized_answer ?? [];
+  const showsLearnerError = feedback !== null && !feedback.correct;
+  const showsIncludedBoundary = feedback?.diagnosis_code === "STOP_VALUE_INCLUDED";
   const displayedSequence = showsIncludedBoundary ? sequence.slice(0, -1) : sequence;
+
+  const title = showsLearnerError ? "你的理解展开" : "执行轨迹";
+  const note = showsLearnerError
+    ? "这是你本次答案的展开，不是正确执行结果"
+    : feedback
+      ? "与正确执行一致"
+      : "提交后显示执行关系";
+
   return (
-    <section className="execution-tape" aria-labelledby="execution-title">
+    <section className={`execution-tape${showsLearnerError ? " learner-error" : ""}`} aria-labelledby="execution-title">
       <div className="tape-label">
-        <span>执行轨迹</span>
-        <small>{transfer ? "由目标反推参数" : feedback ? "根据本次输入展开" : "提交后显示执行关系"}</small>
+        <span>{title}</span>
+        <small>{note}</small>
       </div>
-      <h2 id="execution-title" className="sr-only">range 执行轨迹</h2>
-      <div className="tape-scroll" role="region" aria-label="可横向滚动的 range 执行轨迹" tabIndex={0}>
-        <div className="tape-track">
-          {(displayedSequence.length ? displayedSequence : [null, null, null]).map((value, index) => (
-            <div className="tape-step" key={`${value}-${index}`}>
-              <span className={value === null ? "unknown-node" : "value-node"}>{value ?? "?"}</span>
-              {index < (displayedSequence.length ? displayedSequence : [null, null, null]).length - 1 && <i aria-hidden="true" />}
-            </div>
-          ))}
-          {showsIncludedBoundary && (
-            <div className="boundary-node"><span>10</span><small>停止边界</small></div>
-          )}
+      <h2 id="execution-title" className="sr-only">{title}</h2>
+      {displayedSequence.length === 0 ? (
+        <p className="tape-empty">提交答案后，这里会按步展开每一项的取值。</p>
+      ) : (
+        <div className="tape-scroll" role="region" aria-label={`可横向滚动的${title}`} tabIndex={0}>
+          <div className="tape-track">
+            {displayedSequence.map((value, index) => (
+              <div className="tape-step" key={`${value}-${index}`}>
+                <span className={showsLearnerError ? "value-node learner-node" : "value-node"}>{value}</span>
+                {index < displayedSequence.length - 1 && <i aria-hidden="true" />}
+              </div>
+            ))}
+            {showsIncludedBoundary && (
+              <div className="boundary-node"><span>10</span><small>停止边界</small></div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }
@@ -385,7 +414,8 @@ function LearnPage() {
                   {task.target_sequence && <div className="target-sequence">目标序列 <strong>[{task.target_sequence.join(", ")}]</strong></div>}
                 </div>
 
-                <ExecutionTape envelope={envelope} feedback={feedback} />
+                {/* 迁移阶段的目标序列已在任务描述中给出，此处只为诊断阶段展开学习者自己的作答。 */}
+                {task.kind === "sequence_prediction" && <ExecutionTape feedback={feedback} />}
 
                 {feedback && (
                   <div className={`feedback ${feedback.correct ? "correct" : "needs-work"}`} role="status">
@@ -394,10 +424,18 @@ function LearnPage() {
                   </div>
                 )}
 
-                {envelope.session.hint && (
-                  <div className="hint-panel" role="status">
-                    <span>{envelope.session.hint.level} 级提示</span>
-                    <p>{envelope.session.hint.content}</p>
+                {/* 已解锁的提示全部保留，让"渐进"这一层层加信息的过程可以被回看和复查。 */}
+                {envelope.session.hint_history.length > 0 && (
+                  <div className="hint-stack" role="status">
+                    {envelope.session.hint_history.map((item) => (
+                      <div
+                        key={item.level}
+                        className={`hint-panel${item.level === envelope.session.hint?.level ? " latest" : " earlier"}`}
+                      >
+                        <span>{item.level} 级提示</span>
+                        <p>{item.content}</p>
+                      </div>
+                    ))}
                   </div>
                 )}
 
@@ -458,7 +496,7 @@ function LearnPage() {
             <p className="eyebrow">Agent 当前决定</p>
             <h2 id="decision-title">{envelope.decision.title}</h2>
             <p>{envelope.decision.reason_summary}</p>
-            <div className="decision-rule" />
+            <hr className="decision-rule" />
             <dl>
               <div><dt>正式状态</dt><dd><MasteryBadge state={envelope.mastery.mastery_state} /></dd></div>
               <div><dt>状态依据</dt><dd>{envelope.mastery.reason}</dd></div>

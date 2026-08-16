@@ -132,6 +132,7 @@ trace_status:
     "answer_format": "python_list"
   },
   "hint": null,
+  "hint_history": [],
   "decision": {
     "action": "await_answer",
     "title": "先独立完成诊断题",
@@ -203,7 +204,14 @@ trace_status:
       "level": 1,
       "content": "先判断停止值本身是否会被包含。",
       "reveals_answer": false
-    }
+    },
+    "hint_history": [
+      {
+        "level": 1,
+        "content": "先判断停止值本身是否会被包含。",
+        "reveals_answer": false
+      }
+    ]
   },
   "decision": {
     "action": "retry_with_hint",
@@ -256,6 +264,8 @@ trace_status:
 ```
 
 响应包含新的 `revision`、当前提示、Agent 决策和 Trace 摘要。后端负责根据最近诊断码选择提示路径、限制最高提示级别，并保证提示内容不直接给出答案。诊断码和会话迁移变式均由后端持久化，因此刷新页面不会改变当前提示或题目。
+
+`hint` 是当前最新一层提示，`hint_history` 按等级升序返回本题已解锁的每一层提示。渐进引导的说服力来自逐层递进的过程，因此前端需要同时展示已解锁的所有层级，而不是只显示最后一条。答对后提示等级归零，`hint_history` 随之清空。
 
 ## 7. 掌握证据
 
