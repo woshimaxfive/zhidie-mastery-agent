@@ -203,6 +203,31 @@ def test_validation_errors_use_api_error_contract(tmp_path: Path, monkeypatch):
         assert response.json()["error"]["field"] == "answer"
 
 
+def test_oversized_range_returns_answer_format_error(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("MASTERY_DB_PATH", str(tmp_path / "oversized-range.db"))
+    with TestClient(app) as client:
+        session = client.post("/api/v1/sessions", json={}).json()["session"]
+        transfer = client.post(
+            f"/api/v1/sessions/{session['session_id']}/attempts",
+            json={
+                "task_id": session["task"]["id"],
+                "answer": "[2, 5, 8]",
+                "expected_revision": session["revision"],
+            },
+        ).json()["session"]
+        response = client.post(
+            f"/api/v1/sessions/{session['session_id']}/attempts",
+            json={
+                "task_id": transfer["task"]["id"],
+                "answer": "range(0, 9223372036854775808, 1)",
+                "expected_revision": transfer["revision"],
+            },
+        )
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "INVALID_ANSWER_FORMAT"
+        assert response.json()["error"]["field"] == "answer"
+
+
 def test_persistence_errors_use_api_error_contract(tmp_path: Path, monkeypatch):
     startup_database = tmp_path / "startup.db"
     monkeypatch.setenv("MASTERY_DB_PATH", str(startup_database))

@@ -58,7 +58,11 @@ def parse_range_parameters(raw: str) -> tuple[list[int], list[int]]:
     if params[2] == 0:
         raise AnswerFormatError("步长不能为 0。")
     generated_range = range(*params)
-    if len(generated_range) > 100:
+    try:
+        generated_length = len(generated_range)
+    except OverflowError as exc:
+        raise AnswerFormatError("生成序列过长，请检查停止值和步长。") from exc
+    if generated_length > 100:
         raise AnswerFormatError("生成序列过长，请检查停止值和步长。")
     generated = list(generated_range)
     return params, generated

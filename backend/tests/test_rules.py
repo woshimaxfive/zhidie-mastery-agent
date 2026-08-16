@@ -22,3 +22,8 @@ def test_transfer_accepts_equivalent_stop_values():
 def test_transfer_rejects_large_range_before_list_allocation():
     with pytest.raises(AnswerFormatError, match="生成序列过长"):
         parse_range_parameters("range(0, 1000000000, 1)")
+
+
+def test_transfer_rejects_range_longer_than_platform_size():
+    with pytest.raises(AnswerFormatError, match="生成序列过长"):
+        parse_range_parameters("range(0, 9223372036854775808, 1)")
