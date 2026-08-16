@@ -1,5 +1,7 @@
 # 知迭（Zhidie MasteryAgent）
 
+[![CI](https://github.com/woshimaxfive/zhidie-mastery-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/woshimaxfive/zhidie-mastery-agent/actions/workflows/ci.yml)
+
 知迭是一个以“掌握证据”为核心的个性化学习 Agent。它根据学习者的真实作答进行诊断，选择适当的渐进引导，通过迁移任务验证独立掌握，并据此决定下一步学习动作。
 
 v0.1 提供一条可运行的纵向切片，聚焦 Python `range()`，但产品架构不绑定单一知识点。系统默认离线运行，掌握状态由确定性领域规则更新，不需要 API Key。
@@ -75,6 +77,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 - 页面与交互契约：[前端设计](docs/FRONTEND_DESIGN.md)
 - 前后端数据契约：[API 契约](docs/API_CONTRACT.md)
 - 贡献、审查与提交规则：[协作规范](CONTRIBUTING.md)
+- 安全问题报告：[安全政策](SECURITY.md)
+- 第三方依赖许可：[第三方软件声明](THIRD_PARTY_NOTICES.md)
 
 ## 仓库边界
 
@@ -88,3 +92,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 - 不包含教师端、课程编辑、RAG、文件上传或真实代码沙箱。
 
 README 和界面仅描述已经实现并经过验证的能力。
+
+## 许可证
+
+本项目采用 [Apache License 2.0](LICENSE)。第三方组件仍适用其各自许可证。

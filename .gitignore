@@ -41,5 +41,5 @@ temp/
 .playwright-cli/
 output/playwright/
 
-# Private contest source materials
+# Private source materials
 private-materials/
